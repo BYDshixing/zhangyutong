@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>致张雨童</title>
+    <style>
+        /* 基础样式，重置边距并设置深邃夜空背景 */
+        body,
+        html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: rgb(20, 20, 30);
+            font-family: 'SimHei', 'Microsoft YaHei', sans-serif;
+            user-select: none;
+        }
+
+        canvas {
+            display: block;
+        }
+
+        /* 启动引导层 */
+        #start-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 24px;
+            letter-spacing: 2px;
+            background: rgba(20, 20, 30, 0.9);
+            z-index: 10;
+            cursor: pointer;
+            transition: opacity 1s ease;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="start-overlay">点击屏幕，开启专属祝福</div>
+    <canvas id="heartCanvas"></canvas>
+
+    <script>
+        // --- 1. 初始化与配置 ---
+        const canvas = document.getElementById('heartCanvas');
+        const ctx = canvas.getContext('2d');
+        const overlay = document.getElementById('start-overlay');
+
+        let WIDTH = window.innerWidth;
+        let HEIGHT = window.innerHeight;
+        canvas.width = WIDTH;
+        canvas.height = HEIGHT;
+
+        window.addEventListener('resize', () => {
+            WIDTH = window.innerWidth;
+            HEIGHT = window.innerHeight;
+            canvas.width = WIDTH;
+            canvas.height = HEIGHT;
+        });
+
+        // 点击全屏并启动动画
+        let isRunning = false;
+        overlay.addEventListener('click', () => {
+            if (!isRunning) {
+                // 请求全屏
+                if (document.documentElement.requestFullscreen) {
+                    document.documentElement.requestFullscreen();
+                } else if (document.documentElement.webkitRequestFullscreen) {
+                    document.documentElement.webkitRequestFullscreen();
+                }
+                overlay.style.opacity = '0';
+                setTimeout(() => overlay.style.display = 'none', 1000);
+                isRunning = true;
+                requestAnimationFrame(gameLoop);
+            }
+        });
+
+        // 莫兰迪色系 (使用 RGB 格式方便使用)
+        const STICKER_COLORS = [
+            'rgb(230, 175, 185)',  // 藕粉
+            'rgb(240, 230, 170)',  // 淡黄
+            'rgb(170, 200, 230)',  // 雾霾蓝
+            'rgb(180, 220, 190)'   // 豆绿
+        ];
+
+        // 张雨童 上岸东华 专属祝福文案
+        const TEXTS = [
+            "张雨童", "张雨童上岸东华", "张雨童圆梦东华",
+            "张雨童一战成硕", "成功上岸", "金榜题名", "前程似锦", "未来可期",
+            "张雨童超棒", "张雨童超厉害", "张雨童超优秀",
+            "如愿以偿", "得偿所愿", "圆满上岸", "顶峰相见",
+            "苦尽甘来", "不负努力", "不负韶华", "未来闪闪发光",
+            "考研必胜", "成功录取", "顺利上岸", "一研为定",
+            "张雨童真棒", "张雨童最棒", "张雨童超优秀",
+            "星光不负赶路人", "功夫不负有心人",
+            "所有努力皆有回报", "所有坚持终有收获",
+            "研究生你好", "东华新旅程", "奔赴更好未来",
+            "前途光明", "一路生花", "万事胜意", "平安喜乐",
+            "张雨童值得", "张雨童超赞", "张雨童超厉害",
+            "成功上岸啦", "上岸快乐", "恭喜上岸", "圆满成功",
+            "学业有成", "步步高升", "未来无限", "闪闪发光",
+            "你超优秀的", "努力终有回报", "坚持终有结果",
+            "恭喜张雨童", "祝福张雨童", "张雨童超厉害",
+            "一战成硕张雨童", "成功上岸张雨童",
+            "考研顺利张雨童", "前程似锦张雨童",
+            "圆梦东华张雨童", "东华录取张雨童",
+            "奔赴东华", "开启东华求学路"
+        ];
+
+        const NUM_STICKERS = 100;
+
+        // 工具函数：生成随机数
+        function random(min, max) {
+            return Math.random() * (max - min) + min;
+        }
+        function choice(arr) {
+            return arr[Math.floor(Math.random() * arr.length)];
+        }
+
+        // --- 2. 坐标生成 (适配14寸比例 35) ---
+        function generateNaturalHeartPoints(n) {
+            let points = [];
+            let scaleFactor = Math.min(WIDTH, HEIGHT) / 35;
+
+            for (let i = 0; i < n; i++) {
+                let t = (i / n) * Math.PI * 2;
+                let x = 16 * Math.pow(Math.sin(t), 3);
+                let y = 13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t);
+                points.push({ x: x * scaleFactor, y: -y * scaleFactor });
+            }
+            return points;
+        }
+
+        // --- 3. 核心便签类 ---
+        class Sticker {
+            constructor(idx, targetX, targetY) {
+                this.idx = idx;
+                this.color = choice(STICKER_COLORS);
+                this.text = choice(TEXTS);
+
+                this.targetX = WIDTH / 2 + targetX;
+                this.targetY = HEIGHT / 2 + targetY - 50;
+
+                this.x = this.targetX + random(-50, 50);
+                this.y = this.targetY - random(300, 500);
+
+                this.vx = 0;
+                this.vy = 0;
+                this.angle = random(-15, 15) * Math.PI / 180; // 转为弧度
+                this.spin = random(-0.8, 0.8) * Math.PI / 180;
+                this.visible = false;
+
+                // 判断是否为手机端，自适应字体和标签大小
+                let isMobile = WIDTH < 768;
+                this.fontSize = isMobile ? 14 : 26;
+
+                // 预先测量文字宽度以自适应
+                ctx.font = `bold ${this.fontSize}px 'SimHei', 'Microsoft YaHei'`;
+                let tw = ctx.measureText(this.text).width;
+                this.w = tw + (isMobile ? 20 : 40);
+                this.h = isMobile ? 28 : 50;
+                this.borderRadius = isMobile ? 4 : 8;
+            }
+
+            update(stage, isExplosionFrame, timeTicks) {
+                if (!this.visible) return;
+
+                if (stage === 0 || stage === 1 || stage === 2) {
+                    this.x += (this.targetX - this.x) * 0.025;
+                    this.y += (this.targetY - this.y) * 0.025;
+                    this.angle *= 0.93;
+                }
+                else if (stage === 3) {
+                    if (isExplosionFrame) {
+                        let angle = Math.atan2(this.y - HEIGHT / 2, this.x - WIDTH / 2);
+                        let speed = random(15, 35);
+                        this.vx = Math.cos(angle) * speed;
+                        this.vy = Math.sin(angle) * speed - random(5, 20);
+                    }
+
+                    // 羽毛级慢动作
+                    this.vy += 0.15;
+                    this.vx *= 0.985;
+                    this.vy *= 0.98;
+
+                    this.x += this.vx;
+                    this.y += this.vy;
+
+                    this.x += Math.sin(timeTicks * 0.0015 + this.idx) * 1.5;
+                    this.angle += this.spin;
+                }
+            }
+
+            draw(ctx) {
+                if (!this.visible) return;
+
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                ctx.rotate(this.angle);
+
+                // 绘制圆角矩形
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.roundRect(-this.w / 2, -this.h / 2, this.w, this.h, this.borderRadius);
+                ctx.fill();
+
+                // 绘制文字
+                ctx.fillStyle = "rgb(60, 60, 60)";
+                ctx.font = `bold ${this.fontSize}px 'SimHei', 'Microsoft YaHei'`;
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+                ctx.fillText(this.text, 0, 2); // 微调Y轴使其居中
+
+                ctx.restore();
+            }
+        }
+
+        // 绘制横幅
+        function drawBanner(ctx, alpha) {
+            let text = "致 张雨童 · 圆梦东华";
+            let isMobile = WIDTH < 768;
+            
+            // 手机端字体需要大幅缩小，防止横向溢出屏幕
+            let fontSize = isMobile ? Math.min(WIDTH * 0.08, 30) : 75;
+            ctx.font = `bold ${fontSize}px 'SimHei', 'Microsoft YaHei'`;
+            let tw = ctx.measureText(text).width;
+
+            let bg_w = tw + (isMobile ? 40 : 120);
+            let bg_h = fontSize + (isMobile ? 30 : 60);
+
+            ctx.save();
+            ctx.translate(WIDTH / 2, HEIGHT / 2);
+
+            // 背景框
+            ctx.beginPath();
+            ctx.roundRect(-bg_w / 2, -bg_h / 2 - (isMobile ? 5 : 10), bg_w, bg_h, isMobile ? 15 : 30);
+            ctx.fillStyle = `rgba(255, 255, 255, ${0.82 * (alpha / 255)})`;
+            ctx.fill();
+            ctx.lineWidth = 6;
+            ctx.strokeStyle = `rgba(255, 100, 150, ${alpha / 255})`;
+            ctx.stroke();
+
+            // 文字
+            ctx.fillStyle = `rgba(255, 100, 150, ${alpha / 255})`;
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText(text, 0, -5);
+
+            ctx.restore();
+        }
+
+        // 为旧版浏览器提供 roundRect polyfill
+        if (!CanvasRenderingContext2D.prototype.roundRect) {
+            CanvasRenderingContext2D.prototype.roundRect = function (x, y, w, h, r) {
+                if (w < 2 * r) r = w / 2;
+                if (h < 2 * r) r = h / 2;
+                this.beginPath();
+                this.moveTo(x + r, y);
+                this.arcTo(x + w, y, x + w, y + h, r);
+                this.arcTo(x + w, y + h, x, y + h, r);
+                this.arcTo(x, y + h, x, y, r);
+                this.arcTo(x, y, x + w, y, r);
+                this.closePath();
+                return this;
+            }
+        }
+
+        // --- 4. 主循环控制 ---
+        let heartPoints = generateNaturalHeartPoints(NUM_STICKERS);
+        let stickers = [];
+        for (let i = 0; i < NUM_STICKERS; i++) {
+            stickers.push(new Sticker(i, heartPoints[i].x, heartPoints[i].y));
+        }
+
+        let popups = [];
+        function drawPopup(ctx, p) {
+            ctx.save();
+            ctx.translate(p.x, p.y);
+            
+            ctx.beginPath();
+            ctx.roundRect(0, 0, p.w, p.h, 6);
+            ctx.clip();
+
+            ctx.fillStyle = "rgba(255, 255, 255, 0.95)";
+            ctx.fill();
+
+            ctx.fillStyle = p.color;
+            ctx.fillRect(0, 0, p.w, 28);
+
+            ctx.restore(); 
+            ctx.save();
+            ctx.translate(p.x, p.y);
+            ctx.beginPath();
+            ctx.roundRect(0, 0, p.w, p.h, 6);
+            ctx.strokeStyle = "rgba(0, 0, 0, 0.2)";
+            ctx.stroke();
+
+            ctx.fillStyle = "#fff";
+            ctx.font = "bold 13px sans-serif";
+            ctx.textAlign = "left";
+            ctx.textBaseline = "middle";
+            ctx.fillText("提示", 10, 14);
+
+            ctx.fillStyle = "#333";
+            let isMobile = WIDTH < 768;
+            ctx.font = `bold ${isMobile ? 14 : 18}px 'SimHei', 'Microsoft YaHei'`;
+            ctx.textAlign = "center";
+            ctx.fillText(p.text, p.w/2, p.h/2 + 14);
+            ctx.restore();
+        }
+
+        let stage = 0;
+        let timer = 0;
+        let activeCount = 0;
+        let bannerAlpha = 0;
+        let ticks = 0;
+
+        function gameLoop() {
+            // 填充深色背景
+            ctx.fillStyle = "rgb(20, 20, 30)";
+            ctx.fillRect(0, 0, WIDTH, HEIGHT);
+
+            ticks++;
+
+            // --- 流程控制 ---
+            if (stage === 0) {
+                activeCount += 0.20;
+                for (let s of stickers) {
+                    if (s.idx < activeCount && !s.visible) {
+                        s.visible = true;
+                    }
+                }
+                if (activeCount > NUM_STICKERS + 60) {
+                    stage = 1;
+                    timer = 0;
+                }
+            }
+            else if (stage === 1) {
+                timer++;
+                if (timer > 20) {
+                    if (bannerAlpha < 255) {
+                        bannerAlpha += 8;
+                        if (bannerAlpha > 255) bannerAlpha = 255;
+                    }
+                }
+                if (timer > 150) {
+                    stage = 2;
+                    timer = 0;
+                }
+            }
+            else if (stage === 2) {
+                timer++;
+                // 疯狂弹窗
+                let spawnCount = Math.floor(timer / 10) + 1;
+                for (let i = 0; i < spawnCount; i++) {
+                    let w = random(140, 220);
+                    let h = random(70, 100);
+                    popups.push({
+                        x: random(0, WIDTH - w),
+                        y: random(0, HEIGHT - h),
+                        w: w,
+                        h: h,
+                        color: choice(STICKER_COLORS),
+                        text: choice(TEXTS)
+                    });
+                }
+                if (timer > 120) {
+                    stage = 3;
+                    timer = 0;
+                    popups = [];
+                }
+            }
+            else if (stage === 3) {
+                timer++;
+            }
+
+            let isExplosionFrame = (stage === 3 && timer === 1);
+
+            // --- 更新与绘制 ---
+            for (let s of stickers) {
+                s.update(stage, isExplosionFrame, ticks);
+                s.draw(ctx);
+
+                // 羽毛级坠落循环
+                if (stage === 3 && s.y > HEIGHT + 100) {
+                    s.y = -100;
+                    s.x = random(-100, WIDTH + 100);
+                    s.vy = random(1.0, 3.0);
+                    s.vx = random(-1, 1);
+                }
+            }
+
+            if (stage === 1 || stage === 2) {
+                drawBanner(ctx, bannerAlpha);
+            }
+
+            if (stage === 2) {
+                for (let p of popups) {
+                    drawPopup(ctx, p);
+                }
+            }
+            
+            // 炸开时的白光闪烁
+            if (isExplosionFrame) {
+                ctx.fillStyle = "rgba(255, 255, 255, 0.8)";
+                ctx.fillRect(0, 0, WIDTH, HEIGHT);
+            }
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        // 退出全屏监听 (按 ESC)
+        document.addEventListener('fullscreenchange', () => {
+            if (!document.fullscreenElement) {
+                // 如果需要退出全屏时刷新重置，可以取消下面这行的注释
+                // window.location.reload();
+            }
+        });
+    </script>
+</body>
+
+</html>
